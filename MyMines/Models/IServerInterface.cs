@@ -8,17 +8,15 @@ namespace MyMines.Models
 {
     public interface IServerInterface
     {
-        string _name { get; set; }
-        string _image { get; set; }
-        Dictionary<string, string> _environment { get; set; }
-        short _ports { get; set; }
-        string _volumes { get; set; }
-        bool _state { get; set; }
-        string _ipAddress { get; set; }
-        private const string IMAGE = "itzg/minecraft-server";
-        public void Start();
-        public void Stop();
+        string Name { get; set; }
+        string Image { get; set; }
+        Dictionary<string, string> Environment { get; set; }
+        int Port { get; set; }
+        string Volumes { get; set; }
+        bool IsRunning { get; set; }
+        string IpAddress { get; set; }
         
-
+        void Start();
+        void Stop();
     }
 }

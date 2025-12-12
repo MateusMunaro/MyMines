@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MyMines")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8f1dbbd8706805d43adc375ac54f044ec6c38672")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4b5e67ae3717dd8208e3a67e00ae5496c757a2e3")]
 [assembly: System.Reflection.AssemblyProductAttribute("MyMines")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MyMines")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

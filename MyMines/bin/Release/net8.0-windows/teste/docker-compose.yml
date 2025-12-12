@@ -1,6 +1,4 @@
-
-#DEVELOPED BY MYMINES
-version: "3"
+DEVELOPED BY MYMINES
 services:
 
   mc:
@@ -13,15 +11,14 @@ services:
     environment:
       EULA: "TRUE"
       DEBUG: "true"
-      VERSION: "1.20.2"
-      DIFFICULTY: "HARD"
+      DIFFICULTY: "NORMAL"
       SERVER_NAME: "teste"
       ALLOW_FLIGHT: "true"
       MAX_MEMORY: "3G"
       ONLINE_MODE: "false"
       OVERRIDE_SERVER_PROPERTIES: "true"
       ENABLE_WHITELIST: "FALSE"
-      ENFORE_WHITELIST: "FALSE"
+      ENFORCE_WHITELIST: "FALSE"
       LOG_TIMESTAMP: "true"
       SNOOPER_ENABLED: "false"
 
@@ -30,8 +27,3 @@ services:
     restart: unless-stopped
 volumes:
   data: {}
-
-
- 
-
-        

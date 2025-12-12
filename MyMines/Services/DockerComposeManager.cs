@@ -1,13 +1,11 @@
 using MyMines.Models;
-using System.Diagnostics;
+using System.Text;
+
 namespace MyMines.Services
 {
-
     public class DockerComposeManager
     {
-        private string _services_template = @"
-#DEVELOPED BY MYMINES
-version: ""3""
+        private const string SERVICES_TEMPLATE = @"#DEVELOPED BY MYMINES
 services:
 
   mc:
@@ -16,11 +14,10 @@ services:
       - ./data:/data
       - ./mods:/mods:ro
     ports:
-      - ""25565:25565""
+      - ""{port}:{port}""
     environment:
       EULA: ""TRUE""
       DEBUG: ""true""
-      VERSION: ""{version}""
       DIFFICULTY: ""{difficulty}""
       SERVER_NAME: ""{name}""
       ALLOW_FLIGHT: ""true""
@@ -28,7 +25,7 @@ services:
       ONLINE_MODE: ""false""
       OVERRIDE_SERVER_PROPERTIES: ""true""
       ENABLE_WHITELIST: ""FALSE""
-      ENFORE_WHITELIST: ""FALSE""
+      ENFORCE_WHITELIST: ""FALSE""
       LOG_TIMESTAMP: ""true""
       SNOOPER_ENABLED: ""false""
 
@@ -37,115 +34,215 @@ services:
     restart: unless-stopped
 volumes:
   data: {}
+";
 
+        private readonly DockerCommandExecutor _commandExecutor;
+        private readonly string _serversBasePath;
 
- 
-
-        "; 
-        
- 
-
-        public DockerComposeManager() { }
-
-        public void AddServer(Server server)
-        {  
-            SaveToFile(server);
-        }
-        
-        public void SaveToFile(Server server)
+        public DockerComposeManager() : this(Environment.CurrentDirectory)
         {
-            string path = $"./{server._name}/docker-compose.yml";
-            if (!Directory.Exists($"./{server._name}"))
+        }
+
+        public DockerComposeManager(string basePath)
+        {
+            _serversBasePath = basePath ?? throw new ArgumentNullException(nameof(basePath));
+            _commandExecutor = new DockerCommandExecutor();
+
+            if (!Directory.Exists(_serversBasePath))
             {
-                Directory.CreateDirectory($"./{server._name}");
+                Directory.CreateDirectory(_serversBasePath);
+            }
+        }
+
+        public async Task AddServerAsync(Server server, ServerConfiguration? configuration = null)
+        {
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            if (string.IsNullOrWhiteSpace(server.Name))
+                throw new ArgumentException("Server name cannot be null or empty", nameof(server));
+
+            await SaveToFileAsync(server, configuration);
+        }
+
+        public async Task SaveToFileAsync(Server server, ServerConfiguration? configuration = null)
+        {
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            configuration ??= new ServerConfiguration();
+
+            string serverPath = GetServerPath(server.Name);
+            string dockerComposePath = Path.Combine(serverPath, "docker-compose.yml");
+
+            if (!Directory.Exists(serverPath))
+            {
+                Directory.CreateDirectory(serverPath);
             }
 
-            string fileContent = _services_template
-                .Replace("{version}", "1.20.2")
-                .Replace("{difficulty}", "HARD")
-                .Replace("{name}", server._name);
-            
+            string fileContent = SERVICES_TEMPLATE
+                .Replace("{version}", configuration.Version)
+                .Replace("{difficulty}", configuration.Difficulty)
+                .Replace("{name}", server.Name)
+                .Replace("{port}", server.Port.ToString());
 
-            File.WriteAllText(path, fileContent);
+            await File.WriteAllTextAsync(dockerComposePath, fileContent, Encoding.UTF8);
         }
 
-        public List<IServerInterface> FindServers(){
-            List<IServerInterface> servers = new List<IServerInterface>();
+        public async Task<List<IServerInterface>> FindServersAsync()
+        {
+            var servers = new List<IServerInterface>();
 
-            foreach(var folder in Directory.GetDirectories("./"))
+            if (!Directory.Exists(_serversBasePath))
+                return servers;
+
+            var directories = Directory.GetDirectories(_serversBasePath);
+
+            foreach (var directory in directories)
             {
-                if(Directory.Exists($"{folder}/docker-compose.yml"))
+                var dockerComposePath = Path.Combine(directory, "docker-compose.yml");
+                if (File.Exists(dockerComposePath))
                 {
-                    servers.Add(new Server(folder));
+                    var serverName = Path.GetFileName(directory);
+                    servers.Add(new Server(serverName));
                 }
             }
 
             return servers;
-            
         }
 
-        public void Delete(Server server)
+        public async Task DeleteAsync(Server server)
         {
-            string path = $"./{server._name}";
-            if (!Directory.Exists($"./{server._name}"))
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            string serverPath = GetServerPath(server.Name);
+
+            if (Directory.Exists(serverPath))
             {
-                foreach (var file in Directory.GetFiles(path))
+                await StopAsync(server);
+                
+                await Task.Run(() =>
                 {
-                    File.Delete(file);
-                }
+                    try
+                    {
+                        Directory.Delete(serverPath, true);
+                    }
+                    catch (IOException)
+                    {
+                        System.Threading.Thread.Sleep(100);
+                        Directory.Delete(serverPath, true);
+                    }
+                });
+            }
+        }
 
-                foreach (var subfolder in Directory.GetDirectories(path))
+        public async Task<(bool Success, string Message)> StartAsync(Server server)
+        {
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            string serverPath = GetServerPath(server.Name);
+
+            if (!Directory.Exists(serverPath))
+                return (false, $"Server directory not found: {serverPath}");
+
+            var dockerComposePath = Path.Combine(serverPath, "docker-compose.yml");
+            if (!File.Exists(dockerComposePath))
+                return (false, $"docker-compose.yml not found in: {serverPath}");
+
+            var result = await _commandExecutor.ExecuteCommandAsync(serverPath, "docker-compose up -d");
+
+            if (result.Success)
+            {
+                server.Start();
+                return (true, "Server started successfully");
+            }
+
+            string errorMessage = result.Error;
+            if (errorMessage.Contains("unable to get image"))
+            {
+                errorMessage = "Failed to start server. Please ensure:\n" +
+                              "1. Docker Desktop is running\n" +
+                              "2. You have internet connection to download the image\n" +
+                              "3. Docker is configured correctly\n\n" +
+                              $"Original error: {result.Error}";
+            }
+
+            return (false, errorMessage);
+        }
+
+        public async Task<(bool Success, string Message)> StopAsync(Server server)
+        {
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            string serverPath = GetServerPath(server.Name);
+
+            if (!Directory.Exists(serverPath))
+                return (false, $"Server directory not found: {serverPath}");
+
+            var result = await _commandExecutor.ExecuteCommandAsync(serverPath, "docker-compose down");
+
+            if (result.Success)
+            {
+                server.Stop();
+                return (true, "Server stopped successfully");
+            }
+
+            return (false, $"Failed to stop server: {result.Error}");
+        }
+
+        public async Task<bool> IsServerRunningAsync(Server server)
+        {
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            string serverPath = GetServerPath(server.Name);
+
+            if (!Directory.Exists(serverPath))
+                return false;
+
+            var result = await _commandExecutor.ExecuteCommandAsync(serverPath, "docker-compose ps -q");
+            return result.Success && !string.IsNullOrWhiteSpace(result.Output);
+        }
+
+        public async Task<string> GetServerIPAsync(Server server)
+        {
+            if (server == null)
+                throw new ArgumentNullException(nameof(server));
+
+            string serverPath = GetServerPath(server.Name);
+
+            if (!Directory.Exists(serverPath))
+                return "127.0.0.1";
+
+            try
+            {
+                var result = await _commandExecutor.ExecuteCommandAsync(
+                    serverPath, 
+                    "docker inspect -f \"{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}\" $(docker-compose ps -q)"
+                );
+
+                if (result.Success && !string.IsNullOrWhiteSpace(result.Output))
                 {
-                    Directory.Delete(subfolder, true);
+                    return result.Output.Trim();
                 }
             }
-            
-        }
-
-        public void Start(Server server)
-        {
-            string dockerComposeCommand = "docker-compose up -d";
-            string path = $"./{server._name}";
-            
-            ProcessStartInfo psi = new ProcessStartInfo
+            catch
             {
-                FileName = "cmd.exe",
-                Arguments = $"/C cd {path} && {dockerComposeCommand}",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            
-            using (Process process = Process.Start(psi))
-            {
-                process.WaitForExit();
-            }
-            
-        }
-
-        public void Stop(Server server)
-        {
-            string dockerComposeCommand = "docker-compose down";
-            string path = $"./{server._name}";
-
-            ProcessStartInfo psi = new ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/C cd {path} && {dockerComposeCommand}",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using (Process process = Process.Start(psi))
-            {
-                process.WaitForExit();
             }
 
+            return "127.0.0.1";
         }
-      
+
+        private string GetServerPath(string serverName)
+        {
+            if (string.IsNullOrWhiteSpace(serverName))
+                throw new ArgumentException("Server name cannot be null or empty", nameof(serverName));
+
+            return Path.Combine(_serversBasePath, serverName);
+        }
     }
 }
 

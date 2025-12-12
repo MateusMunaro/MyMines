@@ -8,44 +8,59 @@ namespace MyMines.Models
 {
     public class Server : IServerInterface
     {
-        public string _name { get; set; }
-        public string _image { get; set; }
-        public Dictionary<string, string> _environment { get; set; }
-        public short _ports { get; set; }
-        public string _volumes { get; set; }
-        public bool _state { get; set; }
-        public string _ipAddress { get; set; }
         private const string IMAGE = "itzg/minecraft-server";
 
-
-        public Server(string name)
-        {
-            _name = name;
-        }
+        public string Name { get; set; }
+        public string Image { get; set; }
+        public Dictionary<string, string> Environment { get; set; }
+        public int Port { get; set; }
+        public string Volumes { get; set; }
+        public bool IsRunning { get; set; }
+        public string IpAddress { get; set; }
 
         public Server()
         {
-           
+            Image = IMAGE;
+            Environment = new Dictionary<string, string>();
+            Port = 25565;
+            IsRunning = false;
         }
 
-        public Server(string name, Dictionary<string, string> environment, short ports, string volumes, bool state)
+        public Server(string name) : this()
         {
-            _name = name;
-            _environment = environment;
-            _ports = ports;
-            _volumes = volumes;
-            _state = state;
+            Name = name;
         }
-        
+
+        public Server(string name, Dictionary<string, string> environment, int port, string volumes, bool state) : this()
+        {
+            Name = name;
+            Environment = environment ?? new Dictionary<string, string>();
+            Port = port;
+            Volumes = volumes;
+            IsRunning = state;
+        }
 
         public void Start()
         {
-            _state = true;
+            IsRunning = true;
         }
-        
+
         public void Stop()
         {
-            _state = false;
+            IsRunning = false;
         }
+
+        public override string ToString() => Name;
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is Server other)
+            {
+                return string.Equals(Name, other.Name, StringComparison.OrdinalIgnoreCase);
+            }
+            return false;
+        }
+
+        public override int GetHashCode() => Name?.GetHashCode() ?? 0;
     }
 }

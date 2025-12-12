@@ -4,43 +4,40 @@ namespace MyMines
 {
     public partial class Home : Form
     {
-        private PanelForm panelview;
-        private ServerList ServerList;
+        private PanelForm? _panelView;
+        private ServerList? _serverList;
 
         public Home()
         {
             InitializeComponent();
         }
 
-
         private void button1_Click_1(object sender, EventArgs e)
         {
-            if (this.panelview == null)
+            if (_panelView == null || _panelView.IsDisposed)
             {
-                this.panelview = new PanelForm();
-                this.panelview.Show();
-
+                _panelView = new PanelForm();
+                _panelView.FormClosed += (s, args) => _panelView = null;
+                _panelView.Show();
             }
             else
             {
-                this.panelview.Focus();
+                _panelView.Focus();
             }
-
-
         }
 
         private void button2_Click(object sender, EventArgs e)
         {
-            if (this.ServerList == null)
+            if (_serverList == null || _serverList.IsDisposed)
             {
-                this.ServerList = new ServerList(); 
-                this.ServerList.Show();
+                _serverList = new ServerList();
+                _serverList.FormClosed += (s, args) => _serverList = null;
+                _serverList.Show();
             }
             else
             {
-                this.ServerList.Focus();    
+                _serverList.Focus();
             }
-
         }
     }
 }
